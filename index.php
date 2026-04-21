@@ -1,163 +1,217 @@
 <?php
-echo "Hello this is a cli tool using php to Track Tasks!\n
-You can create, update, view and delete tasks.\n";
-$contents = [];
-if (($file = fopen('tasks.json', 'r', false,)) && filesize("tasks.json") > 0) {
-    $contents = json_decode(fread($file, filesize("tasks.json")), true);
-    foreach ($contents as $id => $content) {
-        listContent($content, $id);
-        echo "\n";
-    }
-    fclose($file);
+$tasks = file_get_contents('tasks.json');
+if ($tasks) {
+    $tasks = json_decode($tasks, true);
 } else {
-    echo "Could not find file tasks.json or it is empty\n";
+    $tasks = [];
 }
-$stop_app = 0;
-while ($stop_app!== 1) {
-    echo "\n\nOptions:\n
-    1 - To add new task\n
-    2 - To update task by available id\n
-    3 - To view task\n
-    4 - List all tasks\n
-    5 - To delete task by id\n
-    6 - Save to file\n
-    q - To exit app\n";
-    echo "\n\n";
-    $input = trim(readline("Enter option: "));
-    echo "\n";
-    switch($input) {
-        case "1":
-            addTask($contents);
-            break;
-        case "2":
-            if (count($contents)) {
-                updateTask($contents);
+$file = "tasks.json";
+if(isset($argv[1]) && strlen(trim($argv[1])) && is_array($tasks)) {
+    switch ($argv[1]) {
+        case "add":
+            if (isset($argv[2])) {
+                addTask($file, $tasks, $argv[2]);
             } else {
-                echo "There are no tasks available\n";
+                echo "No description added\n";
             }
             break;
-        case "3":
-            if (count($contents)) {
-                viewTask($contents);
+        case "update":
+            if (isset($argv[2]) && isset($argv[3])) {
+                updateTask($file, $tasks, $argv[2], $argv[3]);
             } else {
-                echo "There are no tasks available\n";
+                echo "Need argument 'id' followed by 'description'\n";
             }
             break;
-        case "4":
-            if (count($contents)) {
-                viewAll($contents);
+        case "delete":
+            if (isset($argv[2])) {
+                removeTask($file, $tasks, $argv[2]);
             } else {
-                echo "There are no tasks available\n";
+                echo "Need 'id' \n";
             }
             break;
-        case "5":
-            if (count($contents)) {
-                removeTask($contents);
+        case "list":
+            if (isset($argv[2]) && strlen(trim($argv[2]))){
+                viewByStatus($tasks, $argv[2]);
             } else {
-                echo "There are no tasks available\n";
+                viewAll($tasks);
             }
             break;
-        case "6":
-            saveToFile($contents);
+        case "mark-in-progress":
+            if (isset($argv[2])) {
+                markInProgress($file, $tasks, $argv[2]);
+            } else {
+                echo "Need 'id' \n";
+            }
             break;
-        case "q":
-            $stop_app = 1;
+        case "mark-done":
+            if (isset($argv[2])) {
+                markDone($file, $tasks, $argv[2]);
+            } else {
+                echo "Need 'id' \n";
+            }
+            break;
+        case "help":
+            helper();
             break;
         default:
-            $stop_app = 1;
+            helper();
             break;
     }
+} else {
+    helper();
 }
-echo "Exited app\n";
-function addTask(array &$content): void
+
+function addTask(mixed $file, array &$tasks, ?string $description): void
 {
-    $id = (int) readline("Set id, if it exists, you will be prompted again.\n ");
-    while(key_exists($id, $content)) {
-        $id = readline("Set id, if it exists, you will be prompted again.\n ");
-    }    
-    $description = readline("Add a description to the task.\n ");
-    $status = readline("Set status, 1 for 'todo', 2 for 'in-progress' or 3 for 'done'.\n ");
-    while(!($status > 0 && $status < 4)) {
-        $status = readline("Set status, 1 for 'todo', 2 for 'in-progress' or 3 for 'done'.\n");
+    if ($description || strlen(trim($description)) > 0) {
+        $tasks[] = [
+            'description' => $description,
+            'status'      => "todo",
+            'created_at'  => date('d.m.Y H:i:s'),
+            'updated_at'  => ""
+        ];
+        $handle = file_put_contents($file, json_encode($tasks));
+        if ($handle) {
+            echo "Written {$handle} bytes";
+        } else {
+            echo "Failed to write";
+        }
+    }else {
+        echo "Missing description argument";
     }
-    $created_at = date('d.m.Y H:i:s');
-    $updated_at = "";
-    $content[$id] = [
-        'description' => $description,
-        'status'      => $status,
-        'created_at'  => $created_at,
-        'updated_at'  => $updated_at
-    ];
-    echo "Task with id {$id} created successfully!\n ";
+    
 }
-function updateTask(array &$content): void
+function updateTask(mixed $file, array &$tasks, ?int $id, ?string $description): void
 {
-    $id = readline("Get id from range of ids otherwise you will be prompted again.\n ");
-    while(!key_exists($id, $content)) {
-        $id = readline("Get id from range of ids otherwise you will be prompted again.\n ");
-    }
-    listContent($content[$id], $id);
-    $content[$id]['description'] = readline("Type in new description.\n ");
-    $status = readline("Set NEW status, 1 for 'todo', 2 for 'in-progress' or 3 for 'done'.\n ");
-    while(!($status > 0 && $status < 4)) {
-        $status = readline("Set NEW status, 1 for 'todo', 2 for 'in-progress' or 3 for 'done'.\n");
-    }
-    $content[$id]['status'] = $status;
-    $content['updated_at'] = date('d.m.Y H:i:s');
-    echo "Task with id {$id} updated successfully!\n ";
-}
-function viewTask(array &$content): void
-{
-    $id = readline("Get id from range of ids otherwise you will be prompted again.\n ");
-    while(!key_exists($id, $content)) {
-        $id = readline("Get id from range of ids otherwise you will be prompted again.\n ");
-    }
-    listContent($content[$id], $id);
-}
-function viewAll(array &$contents): void
-{
-    foreach ($contents as $id => $content) {
-        listContent($content, $id);
-        echo "\n";
-    }
-}
-function removeTask(array &$content): void
-{
-    $id = readline("Remove task from range of available ids otherwise you will be prompted again.\n ");
-    while(!key_exists($id, $content)) {
-        $id = readline("Remove task from range of available ids otherwise you will be prompted again.\n ");
-    }
-    unset($content[$id]);
-    echo "Removed task with {$id}\n";
-}
-function saveToFile(array &$content): void
-{
-    $res = file_put_contents('tasks.json', json_encode($content));
-    if ($res) {
-        echo "Written {$res} bytes!\n";
+    if (!count($tasks)) {
+        echo "No tasks available\n";
+    } elseif (!$id && $id !== 0) {
+        echo "Missing argument item id\n";
+    } elseif (!isset($tasks[$id])) {
+        echo "Item does not exist\n";
+    } elseif (!strlen(trim($description))) {
+        echo "Missing argument item new description\n";
     } else {
-        echo "Failed to write!\n";
+        $tasks[$id] = [
+            'description' => $description,
+            'status'      => $tasks[$id]['status'],
+            'created_at'  => $tasks[$id]['created_at'],
+            'updated_at'  => date('d.m.Y H:i:s')
+        ];
+        $handle = file_put_contents($file, json_encode($tasks));
+        if ($handle) {
+            echo "Written {$handle} bytes\n";
+        } else {
+            echo "Failed to write\n";
+        }
     }
 }
-function listContent(array $content, int $id): void
+function removeTask(mixed $file, array &$tasks, ?int $id): void
+{
+    if (!count($tasks)) {
+        echo "No tasks available\n";
+    } elseif (!$id && $id !== 0) {
+        echo "Missing argument item id\n";
+    } elseif (!isset($tasks[$id])) {
+        echo "Item does not exist\n";
+    } else {
+        unset($tasks[$id]);
+        $handle = file_put_contents($file, json_encode($tasks));
+        if ($handle) {
+            echo "Written {$handle} bytes\n";
+            echo "Removed task with {$id}\n";
+        } else {
+            echo "Failed to write\n";
+        }
+    }
+}
+function markInProgress(mixed $file, array &$tasks, ?int $id): void
+{
+    if (!count($tasks)) {
+        echo "No tasks available\n";
+    } elseif (!$id && $id !== 0) {
+        echo "Missing argument item id\n";
+    } elseif (!isset($tasks[$id])) {
+        echo "Item does not exist\n";
+    } else {
+        $tasks[$id] = [
+            'description' => $tasks[$id]['description'],
+            'status'      => "in_progress",
+            'created_at'  => $tasks[$id]['created_at'],
+            'updated_at'  => date('d.m.Y H:i:s')
+        ];
+        $handle = file_put_contents($file, json_encode($tasks));
+        if ($handle) {
+            echo "Written {$handle} bytes\n";
+        } else {
+            echo "Failed to write\n";
+        }
+    }
+}
+function markDone(mixed $file, array &$tasks, ?int $id): void
+{
+    if (!count($tasks)) {
+        echo "No tasks available\n";
+    } elseif (!$id && $id !== 0) {
+        echo "Missing argument item id\n";
+    } elseif (!isset($tasks[$id])) {
+        echo "Item does not exist\n";
+    } else {
+        $tasks[$id] = [
+            'description' => $tasks[$id]['description'],
+            'status'      => "done",
+            'created_at'  => $tasks[$id]['created_at'],
+            'updated_at'  => date('d.m.Y H:i:s')
+        ];
+        $handle = file_put_contents($file, json_encode($tasks));
+        if ($handle) {
+            echo "Written {$handle} bytes\n";
+        } else {
+            echo "Failed to write\n";
+        }
+    }
+}
+function viewAll(array &$tasks): void
+{
+    if (!count($tasks)) {
+        echo "No tasks available\n";
+    } else {
+        var_dump($tasks);die;
+        foreach ($tasks as $id => $task) {
+            listContent($task, $id);
+            echo "\n";
+        }
+    }
+}
+function viewByStatus(array &$tasks, string $status): void
+{
+    if(!count($tasks)) {
+        echo "No tasks available\n";
+    } else {
+        $arr = array_filter($tasks, function ($a) use ($status) {
+            return $a['status'] === $status;
+        });
+        foreach ($arr as $k => $v) {
+            listContent($v, $k);
+        } 
+    }
+}
+function listContent(array $task, int $id): void
 {
     echo "Id: {$id}\n";
-    echo "Description: {$content['description']}\n";
-    echo "Status: " . status($content['status']) . "\n";
-    echo "Created at: {$content['created_at']}\n";
-    echo "Updated at: {$content['updated_at']}\n\r";
+    echo "Description: {$task['description']}\n";
+    echo "Status: " . $task['status'] . "\n";
+    echo "Created at: {$task['created_at']}\n";
+    echo "Updated at: {$task['updated_at']}\n\r";
 }
-function status($index): string
+function helper(): void
 {
-    switch($index) {
-        case 1:
-            return 'todo';
-        case 2:
-            return 'in-progress';
-        case 3:
-            return 'done';
-        default:
-            return '';
-    }
+    echo "Available commands:\n
+    \"add\" - with argument of a description use double quotes \"\"\n
+    \"update\" - with argument number \"id\" and another argument description with double quotes \"\"\n
+    \"delete\" - with argument number \"id\"\n
+    \"list\" - use either \"todo\", \"in_progress\" or \"done\" to list tasks by status, or no status to list all\n
+    \"mark-in-progress\": with argument number \"id\" to set task's status to in-progress \n
+    \"mark-done\": with argument number \"id\" to set task's status to done \n";
 }
 ?>
